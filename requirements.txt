@@ -1,0 +1,5 @@
+SQLAlchemy
+canonicaljson
+git+https://github.com/poljar/python-olm.git#egg=olm
+git+https://github.com/matrix-org/matrix-python-sdk.git#egg=matrix_client
+requests

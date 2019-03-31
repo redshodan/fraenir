@@ -1,0 +1,14 @@
+{
+    "matrix": {
+        "homeserver": "",
+        "user": "",
+        "password": "",
+        "token": "",
+        "rooms": [],
+        "encryption": true
+    },
+    "fraenir": {
+        "db": "fraenir.sqlite",
+        "passphrase": "secretz",
+    }
+}
