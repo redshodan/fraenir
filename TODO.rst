@@ -1,9 +1,10 @@
 - encrypted DB for indexing
 - identify messages on type, URL .. other?, so can query on type
-- commands:
--- pause recording
--- resume
--- state
+- commands
+
+  - pause recording
+  - resume
+  - state
 - Update avatar based on state. pause icon over avatar, etc.
 - for URL, index preview text too for searching on
 - #tag in message body with URL
