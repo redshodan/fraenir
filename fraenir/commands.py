@@ -1,5 +1,5 @@
 import logging
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Action
 
 from .db import User, Room, MessageType, Message
 
@@ -7,49 +7,62 @@ from .db import User, Room, MessageType, Message
 log = logging.getLogger(__name__)
 
 
+class CommandError(Exception):
+    def __init__(self, msg):
+        super().__init__()
+        self.msg = msg
+
+
 def registerCmd(cmd):
     CommandParser.registerCmd(cmd)
 
 
-class Command():
-    NAME = None
-    HELP = None
-
-    def __init__(self):
-        pass
-
-    def run(self, cmd, args):
-        pass
+class BaseParser(ArgumentParser):
+    def error(self, message):
+        usage = self.format_usage()
+        usage += f"{self.prog}: error: {message}"
+        raise CommandError(usage)
 
 
-class CommandParser(ArgumentParser):
-    cmds = {}
+class CommandParser(BaseParser):
+    CMDS = {}
 
     def __init__(self, name):
-        super().__init__(prog="fraenir")
-        self.name = name
-        self.prefixes = [f"{name}:", f"@{name}", f"@{name}:"]
+        super().__init__(prog="fraenir", add_help=False)
+        self.prefixes = [name, f"{name}:", f"@{name}", f"@{name}:"]
         self.subparsers = self.add_subparsers()
+        for cmd in CommandParser.CMDS.values():
+            self.subparsers._name_parser_map[cmd.NAME] = cmd
+            for flag in cmd.FLAGS:
+                self.subparsers._name_parser_map[flag] = cmd
 
     @staticmethod
     def registerCmd(cmd):
-        CommandParser.cmds[cmd.NAME] = cmd
+        CommandParser.CMDS[cmd.NAME] = cmd()
 
     def parse(self, line):
         log.info(f"CP parse: {line}")
         if not len([p for p in self.prefixes if line.startswith(p)]):
             return False
 
-        args = self.parse_args(line.split(" ")[1:])
-        print(args)
+        try:
+            args = self.parse_args(line.split(" ")[1:])
+            print(args)
+        except CommandError as e:
+            return e.msg
 
         return True
 
 
-@CommandParser.registerCmd
-class Help(Command):
+@registerCmd
+class Help(BaseParser):
     NAME = "help"
-    HELP = "Show this help message"
+    FLAGS = ["-h"]
+    HELP = "Print this help message"
 
-    def run(self, cmd, args):
-        print(f"Help: {cmd} : {args}")
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.add_argument("--foo", action="store_true")
+
+    # def __call__(self, parser, namespace, values, option_string=None):
+    #     print("HELP ACTION")

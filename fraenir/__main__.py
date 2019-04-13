@@ -30,12 +30,19 @@ def onMessage(room, event):
             else:
                 reply_to_id = None
             line = event["content"]["body"].strip()
-            if cmds.parse(line) is False:
+            ret = cmds.parse(line)
+            if ret is False:
                 log.info("Logged")
                 Message.log(MessageType.MSG, room, event["event_id"],
                             event["sender"], line, reply_to_id)
+            elif isinstance(ret, str):
+                room.send_text(ret)
     else:
         print(event['type'])
+
+
+def onEvent(*args):
+    log.info(f"onEvent: {args}")
 
 
 def run():
@@ -54,6 +61,7 @@ def run():
                           user_id=f"@{mxcfg['user']}:{mxcfg['homeserver']}",
                           encryption=mxcfg["encryption"])
     token = client.login(mxcfg["user"], mxcfg["password"])
+    client.add_listener(onEvent)
 
     try:
         for name in mxcfg["rooms"]:
