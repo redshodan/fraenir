@@ -1,9 +1,13 @@
 {
     "matrix": {
         "homeserver": "",
+        "port": 443,
+        "proxy": null,
+        "proxy_port": null,
+        "proxy_type": null,
+        "ssl_insecure": false,
         "user": "",
         "password": "",
-        "token": "",
         "rooms": [],
         "encryption": true
     },

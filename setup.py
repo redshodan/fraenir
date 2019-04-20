@@ -42,5 +42,5 @@ setup(name='fraenir',
       setup_requires=['pytest-runner'],
       tests_require=requirements("requirements-test.txt"),
       license="GPLv2",
-      entry_points={'console_scripts': ['fraenir = fraenir.__main__:run']},
+      entry_points={'console_scripts': ['fraenir = fraenir.__main__:main']},
       )
