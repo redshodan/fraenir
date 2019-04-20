@@ -1,6 +1,9 @@
 from enum import Enum
 import logging
 
+import pysqlcipher3
+from matrix_client.crypto.crypto_store import CryptoStore
+
 import sqlalchemy
 from sqlalchemy import (create_engine, Table, Column, Integer, Text, ForeignKey,
                         String, DateTime, Index, Boolean, UniqueConstraint,
@@ -19,6 +22,8 @@ log = logging.getLogger(__name__)
 Base = declarative_base()
 Session = sessionmaker()
 engine = None
+db_file = None
+db_pass = None
 
 
 @contextmanager
@@ -114,11 +119,27 @@ class Message(Base):
             session.add(msg)
 
 
+class FrCryptoStore(CryptoStore):
+    def __init__(self, *args, **kwargs):
+        print("FrCryptoStore.__init__", args, kwargs)
+        super().__init__(*args, **kwargs)
+
+    def instanciate_connection(self):
+        print("connecting cryptostore to db")
+        con = pysqlcipher3.connect(
+            self.db_filepath, detect_types=pysqlcipher3.PARSE_DECLTYPES)
+        con.row_factory = pysqlcipher3.Row
+        print("Sending key to db")
+        print(str(con.executescript(f"PRAGMA KEY = '{db_pass}';")))
+        return con
+
+
 def init(mbcfg):
-    global engine
-    log.info(f"Connecting to db: {mbcfg['db']}")
-    engine = create_engine(
-        f"sqlite+pysqlcipher://:{mbcfg['passphrase']}@/{mbcfg['db']}")
+    global engine, db_file, db_pass
+    db_file = mbcfg['db']
+    db_pass = mbcfg['passphrase']
+    log.info(f"Connecting to db: {db_file}")
+    engine = create_engine(f"sqlite+pysqlcipher://:{db_pass}@/{db_file}")
     Session.configure(bind=engine)
     Base.metadata.create_all(engine)
     with session_scope() as session:

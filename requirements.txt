@@ -1,5 +1,8 @@
 SQLAlchemy
 canonicaljson
-git+https://github.com/poljar/python-olm.git#egg=olm
-git+https://github.com/matrix-org/matrix-python-sdk.git#egg=matrix_client
+appdirs
+git+https://github.com/poljar/python-olm.git#egg=python-olm-dev
+git+https://github.com/Zil0/matrix-python-sdk@e2e_beta_2#egg=matrix-python-sdk-e2e
+#git+https://github.com/poljar/python-olm.git#egg=olm
+#git+https://github.com/matrix-org/matrix-python-sdk.git#egg=matrix_client
 requests

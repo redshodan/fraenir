@@ -3,7 +3,6 @@
         "homeserver": "",
         "user": "",
         "password": "",
-        "token": "",
         "rooms": [],
         "encryption": true
     },

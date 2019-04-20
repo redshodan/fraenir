@@ -8,7 +8,7 @@ from requests.exceptions import MissingSchema
 
 from .commands import CommandParser
 from . import db
-from .db import User, Room, MessageType, Message
+from .db import FrCryptoStore, User, Room, MessageType, Message
 
 
 log = logging.getLogger(__name__)
@@ -39,6 +39,8 @@ def onMessage(room, event):
                 room.send_text(ret)
     else:
         print(event['type'])
+        print(dir(event))
+        print(dir(room))
 
 
 def onEvent(*args):
@@ -57,16 +59,22 @@ def run():
     cmds = CommandParser(mxcfg["user"])
     db.init(fcfg)
 
-    client = MatrixClient(mxcfg["homeserver"],
-                          user_id=f"@{mxcfg['user']}:{mxcfg['homeserver']}",
-                          encryption=mxcfg["encryption"])
+    kwargs = {"user_id": f"@{mxcfg['user']}:{mxcfg['homeserver']}",
+              "encryption": mxcfg["encryption"]}
+    if mxcfg["encryption"]:
+        kwargs["restore_device_id"] = True
+        kwargs["encryption_conf"] = {'db_path': os.path.dirname(mxcfg["db"]),
+                                     'db_name': os.path.basename(mxcfg["db"]),
+                                     'Store': FrCryptoStore}
+    client = MatrixClient(mxcfg["homeserver"], **kwargs)
     token = client.login(mxcfg["user"], mxcfg["password"])
     client.add_listener(onEvent)
 
     try:
         for name in mxcfg["rooms"]:
             room = client.join_room(name)
-            log.info(f"Connected to room: {room.display_name} / {room.room_id}")
+            room.enable_encryption()
+            log.info(f"Connected to room: {room.name} / {room.room_id}")
             room.add_listener(onMessage)
     except MatrixRequestError as e:
         log.exception(e)
