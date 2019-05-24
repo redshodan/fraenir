@@ -1,6 +1,7 @@
 {
     "matrix": {
         "homeserver": "",
+        "domain": "",
         "user": "",
         "password": "",
         "rooms": [],
