@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import logging
@@ -13,11 +14,21 @@ from .db import FrCryptoStore, User, Room, MessageType, Message
 
 log = logging.getLogger(__name__)
 cmds = None
+client = None
+mxcfg = None
 
 
 # Called when a message is recieved.
-def onMessage(room, event):
+def onMessage(*args):
+    if len(args) == 1:
+        event = args[0]
+        room = client.rooms[event['room_id']]
+    elif len(args) == 2:
+        room, event = args
     log.info(f"onMessage: {repr(room)} {json.dumps(event)}")
+    if room.room_id not in mxcfg["rooms"]:
+        log.info(f"Skipping event for unknown room: {room.room_id}")
+        return
     if event['type'] == "m.room.member":
         if 'membership' in event and event['membership'] == "join":
             log.info(f"{event['content']['displayname']} joined")
@@ -43,12 +54,8 @@ def onMessage(room, event):
         print(dir(room))
 
 
-def onEvent(*args):
-    log.info(f"onEvent: {args}")
-
-
 def run():
-    global cmds
+    global mxcfg, cmds, client
 
     logging.basicConfig(level=logging.INFO)
 
@@ -59,23 +66,25 @@ def run():
     cmds = CommandParser(mxcfg["user"])
     db.init(fcfg)
 
-    kwargs = {"user_id": f"@{mxcfg['user']}:{mxcfg['homeserver']}",
-              "encryption": mxcfg["encryption"]}
+    kwargs = {"user_id": mxcfg['user'],
+              "encryption": True if mxcfg["encryption"] else False}
     if mxcfg["encryption"]:
         kwargs["restore_device_id"] = True
-        kwargs["encryption_conf"] = {'db_path': os.path.dirname(mxcfg["db"]),
-                                     'db_name': os.path.basename(mxcfg["db"]),
-                                     'Store': FrCryptoStore}
+        kwargs["encryption_conf"] = \
+            {'store_conf':
+             {'db_path': os.path.abspath(os.path.dirname(fcfg["db"])),
+              'db_name': os.path.basename(fcfg["db"])},
+             'Store': FrCryptoStore}
     client = MatrixClient(mxcfg["homeserver"], **kwargs)
-    token = client.login(mxcfg["user"], mxcfg["password"])
-    client.add_listener(onEvent)
+    token = client.login(f"@{mxcfg['user']}:{mxcfg['domain']}", mxcfg["password"])
+    client.add_listener(onMessage)
 
     try:
         for name in mxcfg["rooms"]:
             room = client.join_room(name)
             room.enable_encryption()
             log.info(f"Connected to room: {room.name} / {room.room_id}")
-            room.add_listener(onMessage)
+            #room.add_listener(onMessage)
     except MatrixRequestError as e:
         log.exception(e)
         if e.code == 400:

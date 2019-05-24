@@ -1,7 +1,7 @@
 from enum import Enum
 import logging
 
-import pysqlcipher3
+from pysqlcipher3 import dbapi2
 from matrix_client.crypto.crypto_store import CryptoStore
 
 import sqlalchemy
@@ -117,6 +117,7 @@ class Message(Base):
                           from_id=f_id, body=body,
                           reply_to_event_id=reply_to_event_id)
             session.add(msg)
+            session.commit()
 
 
 class FrCryptoStore(CryptoStore):
@@ -126,11 +127,11 @@ class FrCryptoStore(CryptoStore):
 
     def instanciate_connection(self):
         print("connecting cryptostore to db")
-        con = pysqlcipher3.connect(
-            self.db_filepath, detect_types=pysqlcipher3.PARSE_DECLTYPES)
-        con.row_factory = pysqlcipher3.Row
+        con = dbapi2.connect(
+            self.db_filepath, detect_types=dbapi2.PARSE_DECLTYPES)
+        con.row_factory = dbapi2.Row
         print("Sending key to db")
-        print(str(con.executescript(f"PRAGMA KEY = '{db_pass}';")))
+        con.executescript(f"PRAGMA KEY = '{db_pass}';")
         return con
 
 
