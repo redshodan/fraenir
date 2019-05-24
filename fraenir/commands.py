@@ -57,7 +57,7 @@ class CommandParser(BaseParser):
 @registerCmd
 class Help(BaseParser):
     NAME = "help"
-    FLAGS = ["-h"]
+    FLAGS = []
     HELP = "Print this help message"
 
     def __init__(self, *args, **kwargs):

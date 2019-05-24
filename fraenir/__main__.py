@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import logging
+from datetime import datetime
 
 from matrix_client.client import MatrixClient
 from matrix_client.api import MatrixRequestError
@@ -29,6 +30,10 @@ def onMessage(*args):
     if room.room_id not in mxcfg["rooms"]:
         log.info(f"Skipping event for unknown room: {room.room_id}")
         return
+    if event["sender"] == mxcfg["user_id"]:
+        log.info(f"Skipping my own event")
+        return
+
     if event['type'] == "m.room.member":
         if 'membership' in event and event['membership'] == "join":
             log.info(f"{event['content']['displayname']} joined")
@@ -44,8 +49,10 @@ def onMessage(*args):
             ret = cmds.parse(line)
             if ret is False:
                 log.info("Logged")
-                Message.log(MessageType.MSG, room, event["event_id"],
-                            event["sender"], line, reply_to_id)
+                Message.log(
+                    MessageType.MSG, room, event["event_id"], event["sender"],
+                    datetime.fromtimestamp(event["origin_server_ts"] / 1000.0),
+                    line, reply_to_id)
             elif isinstance(ret, str):
                 room.send_text(ret)
     else:
@@ -66,6 +73,7 @@ def run():
     cmds = CommandParser(mxcfg["user"])
     db.init(fcfg)
 
+    mxcfg["user_id"] = f"@{mxcfg['user']}:{mxcfg['domain']}"
     kwargs = {"user_id": mxcfg['user'],
               "encryption": True if mxcfg["encryption"] else False}
     if mxcfg["encryption"]:
@@ -76,7 +84,7 @@ def run():
               'db_name': os.path.basename(fcfg["db"])},
              'Store': FrCryptoStore}
     client = MatrixClient(mxcfg["homeserver"], **kwargs)
-    token = client.login(f"@{mxcfg['user']}:{mxcfg['domain']}", mxcfg["password"])
+    token = client.login(mxcfg["user_id"], mxcfg["password"])
     client.add_listener(onMessage)
 
     try:

@@ -105,16 +105,17 @@ class Message(Base):
     event_id = Column(String, nullable=False)
     from_id = Column(Integer, ForeignKey("users.id", ondelete='CASCADE'),
                      nullable=False)
+    tstamp = sqlalchemy.Column(DateTime, nullable=False)
     body = Column(String, nullable=False)
     reply_to_event_id = Column(String, nullable=True)
 
     @staticmethod
-    def log(type, room, event_id, from_id, body, reply_to_event_id=None):
+    def log(type, room, event_id, from_id, tstamp, body, reply_to_event_id=None):
         with session_scope() as session:
             r_id = Room.lookup(session, room)
             f_id = User.lookup(session, from_id)
             msg = Message(type=type, room_id=r_id, event_id=event_id,
-                          from_id=f_id, body=body,
+                          from_id=f_id, tstamp=tstamp, body=body,
                           reply_to_event_id=reply_to_event_id)
             session.add(msg)
             session.commit()
