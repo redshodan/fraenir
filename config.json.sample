@@ -10,5 +10,6 @@
     "fraenir": {
         "db": "fraenir.sqlite",
         "passphrase": "secretz",
+        "cmd-prefix": "@"
     }
 }

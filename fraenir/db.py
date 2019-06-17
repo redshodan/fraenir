@@ -1,19 +1,13 @@
-from enum import Enum
 import logging
 
 from pysqlcipher3 import dbapi2
 from matrix_client.crypto.crypto_store import CryptoStore
 
 import sqlalchemy
-from sqlalchemy import (create_engine, Table, Column, Integer, Text, ForeignKey,
-                        String, DateTime, Index, Boolean, UniqueConstraint,
-                        Sequence)
-from sqlalchemy.engine import Engine
-from sqlalchemy.types import Enum as SQLEnum
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import (create_engine, Column, Integer, ForeignKey, String,
+                        DateTime, Sequence)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relation
-from sqlalchemy.orm.exc import NoResultFound
 from contextlib import contextmanager
 
 
@@ -90,16 +84,42 @@ class Room(Base):
             return r.id
 
 
-class MessageType(Enum):
-    MSG = 1
-    URL = 2
+class MessageType(Base):
+    __tablename__ = "msgtypes"
+
+    default_types = ["message", "url"]
+
+    id = Column(Integer, Sequence('messages_id_seq'), primary_key=True)
+    name = Column(String, nullable=False, unique=True)
+
+    cache = {}
+
+    @staticmethod
+    def load(session):
+        for name in MessageType.default_types:
+            if not (session.query(MessageType).
+                    filter(MessageType.name == name).one_or_none()):
+                session.add(MessageType(name=name))
+        session.flush()
+        for t in session.query(MessageType).all():
+            MessageType.cache[t.name] = t.id
+
+    @staticmethod
+    def lookup(session, name):
+        if name in MessageType.cache:
+            return MessageType.cache[name]
+        else:
+            mt = MessageType(name=name)
+            session.add(mt)
+            session.flush()
+            return mt.id
 
 
 class Message(Base):
     __tablename__ = "messages"
 
     id = Column(Integer, Sequence('messages_id_seq'), primary_key=True)
-    type = Column(SQLEnum(MessageType), nullable=False)
+    type_id = Column(Integer, ForeignKey("msgtypes.id"))
     room_id = Column(Integer, ForeignKey("rooms.id", ondelete='CASCADE'),
                      nullable=False)
     event_id = Column(String, nullable=False)
@@ -109,29 +129,30 @@ class Message(Base):
     body = Column(String, nullable=False)
     reply_to_event_id = Column(String, nullable=True)
 
+    type = relation("MessageType")
+
     @staticmethod
-    def log(type, room, event_id, from_id, tstamp, body, reply_to_event_id=None):
+    def log(mt_name, room, event_id, from_id, tstamp, body,
+            reply_to_event_id=None):
         with session_scope() as session:
+            mt_id = MessageType.lookup(session, mt_name)
             r_id = Room.lookup(session, room)
             f_id = User.lookup(session, from_id)
-            msg = Message(type=type, room_id=r_id, event_id=event_id,
-                          from_id=f_id, tstamp=tstamp, body=body,
-                          reply_to_event_id=reply_to_event_id)
+            msg = Message(type_id=mt_id, room_id=r_id,
+                          event_id=event_id, from_id=f_id, tstamp=tstamp,
+                          body=body, reply_to_event_id=reply_to_event_id)
             session.add(msg)
             session.commit()
 
 
 class FrCryptoStore(CryptoStore):
     def __init__(self, *args, **kwargs):
-        print("FrCryptoStore.__init__", args, kwargs)
         super().__init__(*args, **kwargs)
 
     def instanciate_connection(self):
-        print("connecting cryptostore to db")
         con = dbapi2.connect(
             self.db_filepath, detect_types=dbapi2.PARSE_DECLTYPES)
         con.row_factory = dbapi2.Row
-        print("Sending key to db")
         con.executescript(f"PRAGMA KEY = '{db_pass}';")
         return con
 
@@ -147,3 +168,4 @@ def init(mbcfg):
     with session_scope() as session:
         User.load(session)
         Room.load(session)
+        MessageType.load(session)

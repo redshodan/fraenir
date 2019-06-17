@@ -1,68 +1,145 @@
 import logging
-from argparse import ArgumentParser, Action
+from argparse import ArgumentParser
+from datetime import datetime
 
-from .db import User, Room, MessageType, Message
+from .db import Message
 
 
 log = logging.getLogger(__name__)
 
 
 class CommandError(Exception):
-    def __init__(self, msg):
+    def __init__(self, message):
         super().__init__()
-        self.msg = msg
+        self.message = message
+
+
+class HelpError(Exception):
+    pass
 
 
 def registerCmd(cmd):
-    CommandParser.registerCmd(cmd)
+    CommandParser.CMDS[cmd.NAME] = cmd()
 
 
-class BaseParser(ArgumentParser):
-    def error(self, message):
-        usage = self.format_usage()
-        usage += f"{self.prog}: error: {message}"
-        raise CommandError(usage)
+class SafeArgParser(ArgumentParser):
+    def __init__(self, *args, **kwargs):
+        self.exit_message = None
+        self.safe_parent = None
+        super().__init__(*args, **kwargs)
+
+    def print_usage(self, file=None):
+        self.exitMessage(self.format_usage())
+
+    def print_help(self, file=None):
+        self.exitMessage(self.format_help())
+
+    def _print_message(self, message, file=None):
+        self.exitMessage(message)
+
+    def parse_args(self, args=None, namespace=None):
+        self.exit_message = None
+        return super().parse_args(args, namespace)
+
+    def exit(self, status=0, message=None):
+        self.exitMessage(message)
+        raise HelpError()
+
+    def exitMessage(self, message):
+        if not message:
+            return
+        if self.safe_parent:
+            parser = self.safe_parent
+        else:
+            parser = self
+        if parser.exit_message is None:
+            parser.exit_message = message
+        else:
+            parser.exit_message = parser.exit_message + "\n" + message
 
 
-class CommandParser(BaseParser):
+class CommandParser:
     CMDS = {}
 
-    def __init__(self, name):
-        super().__init__(prog="fraenir", add_help=False)
+    def __init__(self, name, cmd_prefix):
+        self.parser = SafeArgParser(prog=name, add_help=False)
         self.prefixes = [name, f"{name}:", f"@{name}", f"@{name}:"]
-        self.subparsers = self.add_subparsers()
+        self.cmd_prefix = cmd_prefix
+
+        self.parser.add_argument("-h", "--help", action="help")
+        self.parser.set_defaults(func=self)
+        self.subparsers = self.parser.add_subparsers()
         for cmd in CommandParser.CMDS.values():
-            self.subparsers._name_parser_map[cmd.NAME] = cmd
-            for flag in cmd.FLAGS:
-                self.subparsers._name_parser_map[flag] = cmd
+            parser = self.subparsers.add_parser(cmd.NAME, **cmd.KWARGS)
+            parser.set_defaults(func=cmd)
+            parser.safe_parent = self.parser
 
-    @staticmethod
-    def registerCmd(cmd):
-        CommandParser.CMDS[cmd.NAME] = cmd()
-
-    def parse(self, line):
+    def parse(self, room, event):
+        line = event["content"]["body"].strip()
         log.info(f"CP parse: {line}")
-        if not len([p for p in self.prefixes if line.startswith(p)]):
-            return False
+        words = None
+        if len([p for p in self.prefixes if line.startswith(p)]):
+            words = line.split(" ")[1:]
+            line = " ".join(words)
+        if line.startswith(self.cmd_prefix):
+            words = line[1:].split(" ")
+        if not words:
+            return self.log(room, event)
 
         try:
-            args = self.parse_args(line.split(" ")[1:])
-            print(args)
+            args = self.parser.parse_args(words)
+            if self.parser.exit_message:
+                return self.parser.exit_message
+            else:
+                return args.func(args)
+        except HelpError:
+            if self.parser.exit_message:
+                return self.parser.exit_message
+            else:
+                return self.parser.format_help()
         except CommandError as e:
-            return e.msg
+            return e.message
 
         return True
 
+    def log(self, room, event):
+        log.info("Logging...")
+        if ("m.relates_to" in event["content"] and
+              "m.in_reply_to" in event["content"]["m.relates_to"]):
+            reply_to_id = (event["content"]["m.relates_to"]
+                           ["m.in_reply_to"]["event_id"])
+        else:
+            reply_to_id = None
+        line = event["content"]["body"].strip()
+        Message.log("message", room, event["event_id"], event["sender"],
+                    datetime.fromtimestamp(event["origin_server_ts"] / 1000.0),
+                    line, reply_to_id)
+
+    def __call__(self, args):
+        return self.parser.format_help()
+
 
 @registerCmd
-class Help(BaseParser):
-    NAME = "help"
-    FLAGS = []
-    HELP = "Print this help message"
+class Search:
+    NAME = "search"
+    KWARGS = {"help": "Search recorded messages"}
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.add_argument("--foo", action="store_true")
+    def __call__(self, args):
+        return "Search.__call__"
 
-    # def __call__(self, parser, namespace, values, option_string=None):
-    #     print("HELP ACTION")
+
+@registerCmd
+class Fermi:
+    NAME = "fermi"
+    KWARGS = {"help": "Define yet another solution to the Fermi Paradox"}
+
+    def __call__(self, args):
+        return "Fermi.__call__"
+
+
+if __name__ == "__main__":
+    import sys
+    print(sys.argv)
+    cmds = CommandParser("botty", "@")
+    ret = cmds.parse(" ".join(["botty:"] + sys.argv[1:]))
+    print(ret)

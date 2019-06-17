@@ -24,8 +24,8 @@ def analyze(site, sitemap=None, verbose=False, **session_params):
     def calc_total_time():
         return time.time() - start_time
 
-    crawled = []
-    output = {'pages': [], 'keywords': [], 'errors': [], 'total_time': calc_total_time()}
+    output = {'pages': [], 'keywords': [], 'errors': [],
+              'total_time': calc_total_time()}
 
     if check_dns(site) is False:
         output['errors'].append('DNS Lookup Failed')
@@ -45,9 +45,12 @@ def analyze(site, sitemap=None, verbose=False, **session_params):
     pg.analyze()
     output['pages'].append(pg.talk())
 
-    sorted_words = sorted(Manifest.wordcount.items(), key=itemgetter(1), reverse=True)
-    sorted_bigrams = sorted(Manifest.bigrams.items(), key=itemgetter(1), reverse=True)
-    sorted_trigrams = sorted(Manifest.trigrams.items(), key=itemgetter(1), reverse=True)
+    sorted_words = sorted(Manifest.wordcount.items(), key=itemgetter(1),
+                          reverse=True)
+    sorted_bigrams = sorted(Manifest.bigrams.items(), key=itemgetter(1),
+                            reverse=True)
+    sorted_trigrams = sorted(Manifest.trigrams.items(), key=itemgetter(1),
+                             reverse=True)
 
     output['keywords'] = []
 
@@ -73,7 +76,8 @@ def analyze(site, sitemap=None, verbose=False, **session_params):
             })
 
     # Sort one last time...
-    output['keywords'] = sorted(output['keywords'], key=itemgetter('count'), reverse=True)
+    output['keywords'] = sorted(output['keywords'], key=itemgetter('count'),
+                                reverse=True)
 
     output['total_time'] = calc_total_time()
 

@@ -2,15 +2,13 @@ import os
 import sys
 import json
 import logging
-from datetime import datetime
 
 from matrix_client.client import MatrixClient
 from matrix_client.api import MatrixRequestError
-from requests.exceptions import MissingSchema
 
 from .commands import CommandParser
 from . import db
-from .db import FrCryptoStore, User, Room, MessageType, Message
+from .db import FrCryptoStore
 
 
 log = logging.getLogger(__name__)
@@ -40,25 +38,11 @@ def onMessage(*args):
     elif event['type'] == "m.room.message":
         if event['content']['msgtype'] == "m.text":
             log.info(f"{event['sender']}: {event['content']['body']}")
-            if ("m.relates_to" in event["content"] and
-                "m.in_reply_to" in event["content"]["m.relates_to"]):
-                reply_to_id = event["content"]["m.relates_to"]["m.in_reply_to"]["event_id"]
-            else:
-                reply_to_id = None
-            line = event["content"]["body"].strip()
-            ret = cmds.parse(line)
-            if ret is False:
-                log.info("Logged")
-                Message.log(
-                    MessageType.MSG, room, event["event_id"], event["sender"],
-                    datetime.fromtimestamp(event["origin_server_ts"] / 1000.0),
-                    line, reply_to_id)
-            elif isinstance(ret, str):
+            ret = cmds.parse(room, event)
+            if ret:
                 room.send_text(ret)
     else:
-        print(event['type'])
-        print(dir(event))
-        print(dir(room))
+        log.info(f"Unhandled event of type: {event['type']}")
 
 
 def run():
@@ -70,7 +54,7 @@ def run():
     mxcfg = cfg["matrix"]
     fcfg = cfg["fraenir"]
 
-    cmds = CommandParser(mxcfg["user"])
+    cmds = CommandParser(mxcfg["user"], fcfg["cmd-prefix"])
     db.init(fcfg)
 
     mxcfg["user_id"] = f"@{mxcfg['user']}:{mxcfg['domain']}"
@@ -84,7 +68,7 @@ def run():
               'db_name': os.path.basename(fcfg["db"])},
              'Store': FrCryptoStore}
     client = MatrixClient(mxcfg["homeserver"], **kwargs)
-    token = client.login(mxcfg["user_id"], mxcfg["password"])
+    client.login(mxcfg["user_id"], mxcfg["password"])
     client.add_listener(onMessage)
 
     try:
@@ -92,7 +76,7 @@ def run():
             room = client.join_room(name)
             room.enable_encryption()
             log.info(f"Connected to room: {room.name} / {room.room_id}")
-            #room.add_listener(onMessage)
+            # room.add_listener(onMessage)
     except MatrixRequestError as e:
         log.exception(e)
         if e.code == 400:
@@ -102,7 +86,10 @@ def run():
             log.warn("Couldn't find room.")
             sys.exit(12)
 
-    client.listen_forever()
+    try:
+        client.listen_forever()
+    except KeyboardInterrupt:
+        log.info("Received keyboard interrupt. Shutting down.")
 
 
 if __name__ == "__main__":
