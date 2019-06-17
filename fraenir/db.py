@@ -54,7 +54,7 @@ def namedcache(klass):
             return obj.id
 
     if not hasattr(klass, "__NC_preload__"):
-        klass.__NC_preload__ =  []
+        klass.__NC_preload__ = []
     klass.__NC_cache__ = {}
     klass.load = load
     klass.lookup = lookup

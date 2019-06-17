@@ -135,11 +135,3 @@ class Fermi:
 
     def __call__(self, args):
         return "Fermi.__call__"
-
-
-if __name__ == "__main__":
-    import sys
-    print(sys.argv)
-    cmds = CommandParser("botty", "@")
-    ret = cmds.parse(" ".join(["botty:"] + sys.argv[1:]))
-    print(ret)
