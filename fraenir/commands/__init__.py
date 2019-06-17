@@ -2,7 +2,7 @@ import logging
 from argparse import ArgumentParser
 from datetime import datetime
 
-from .db import Message
+from ..db import Message
 
 
 log = logging.getLogger(__name__)
@@ -119,19 +119,4 @@ class CommandParser:
         return self.parser.format_help()
 
 
-@registerCmd
-class Search:
-    NAME = "search"
-    KWARGS = {"help": "Search recorded messages"}
-
-    def __call__(self, args):
-        return "Search.__call__"
-
-
-@registerCmd
-class Fermi:
-    NAME = "fermi"
-    KWARGS = {"help": "Define yet another solution to the Fermi Paradox"}
-
-    def __call__(self, args):
-        return "Fermi.__call__"
+from . import search, fermi
