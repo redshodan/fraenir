@@ -33,31 +33,43 @@ def session_scope():
         session.close()
 
 
+def namedcache(klass):
+    def load(session):
+        for name in klass.__NC_preload__:
+            if not (session.query(klass).
+                    filter(klass.name == name).one_or_none()):
+                session.add(klass(name=name))
+        session.flush()
+        for t in session.query(klass).all():
+            klass.__NC_cache__[t.name] = t.id
+
+    def lookup(session, name, **kwargs):
+        if name in klass.cache:
+            return klass.cache[name]
+        else:
+            kwargs[name] = name
+            obj = klass(**kwargs)
+            session.add(obj)
+            session.flush()
+            return obj.id
+
+    if not hasattr(klass, "__NC_preload__"):
+        klass.__NC_preload__ =  []
+    klass.__NC_cache__ = {}
+    klass.load = load
+    klass.lookup = lookup
+    return klass
+
+
+@namedcache
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, Sequence('users_id_seq'), primary_key=True)
     name = Column(String, unique=True)
 
-    cache = {}
 
-    @staticmethod
-    def load(session):
-        for u in session.query(User).all():
-            User.cache[u.name] = u.id
-
-    @staticmethod
-    def lookup(session, name):
-        if name in User.cache:
-            return User.cache[name]
-        else:
-            u = User(name=name)
-            session.add(u)
-            session.flush()
-            User.cache[name] = u.id
-            return u.id
-
-
+@namedcache
 class Room(Base):
     __tablename__ = "rooms"
 
@@ -65,54 +77,14 @@ class Room(Base):
     room_id = Column(String, unique=True)
     name = Column(String)
 
-    cache = {}
 
-    @staticmethod
-    def load(session):
-        for r in session.query(Room).all():
-            Room.cache[r.room_id] = r.id
-
-    @staticmethod
-    def lookup(session, room):
-        if room.room_id in Room.cache:
-            return Room.cache[room.room_id]
-        else:
-            r = Room(room_id=room.room_id, name=room.name)
-            session.add(r)
-            session.flush()
-            Room.cache[room.room_id] = r.id
-            return r.id
-
-
+@namedcache
 class MessageType(Base):
     __tablename__ = "msgtypes"
-
-    default_types = ["message", "url"]
+    __NC_preload__ = ["message", "url"]
 
     id = Column(Integer, Sequence('messages_id_seq'), primary_key=True)
     name = Column(String, nullable=False, unique=True)
-
-    cache = {}
-
-    @staticmethod
-    def load(session):
-        for name in MessageType.default_types:
-            if not (session.query(MessageType).
-                    filter(MessageType.name == name).one_or_none()):
-                session.add(MessageType(name=name))
-        session.flush()
-        for t in session.query(MessageType).all():
-            MessageType.cache[t.name] = t.id
-
-    @staticmethod
-    def lookup(session, name):
-        if name in MessageType.cache:
-            return MessageType.cache[name]
-        else:
-            mt = MessageType(name=name)
-            session.add(mt)
-            session.flush()
-            return mt.id
 
 
 class Message(Base):
@@ -136,7 +108,7 @@ class Message(Base):
             reply_to_event_id=None):
         with session_scope() as session:
             mt_id = MessageType.lookup(session, mt_name)
-            r_id = Room.lookup(session, room)
+            r_id = Room.lookup(session, room.name, room_id=room.room_id)
             f_id = User.lookup(session, from_id)
             msg = Message(type_id=mt_id, room_id=r_id,
                           event_id=event_id, from_id=f_id, tstamp=tstamp,
@@ -145,6 +117,7 @@ class Message(Base):
             session.commit()
 
 
+# Wrapper to force matrix_client CryptoStore to use the sqlcipher db
 class FrCryptoStore(CryptoStore):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
